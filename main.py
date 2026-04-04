@@ -1,5 +1,6 @@
 import argparse
 import os
+from dotenv import load_dotenv
 from scanner.core import Orchestrator
 from scanner.reporting import Reporter
 from scanner.loading import SimpleLoader
@@ -7,8 +8,11 @@ from scanner.reporting_pdf import to_pdf
 from scanner.ai_analyzer import GeminiAnalyzer
 from datetime import datetime
 
-# Gemini API Key - Add your key here
-GEMINI_API_KEY = ""
+# Load environment variables from .env file
+load_dotenv()
+
+# Get Gemini API Key from environment variable
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 def parse_args():
     p = argparse.ArgumentParser(description="Mini-OWASP Web Scanner")
@@ -75,8 +79,8 @@ def main():
         ai_loader.start()
 
         try:
-            if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-                raise ValueError("Gemini API key not configured. Set GEMINI_API_KEY in main.py")
+            if not GEMINI_API_KEY:
+                raise ValueError("Gemini API key not configured. Add GEMINI_API_KEY to your .env file")
 
             analyzer = GeminiAnalyzer(api_key=GEMINI_API_KEY)
             findings = analyzer.analyze_findings(findings)
