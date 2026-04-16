@@ -5,10 +5,13 @@ from scanner.efficiency_layer import EfficiencyOrchestrator
 class GeminiAnalyzer:
     """Integrates Google Gemini AI for vulnerability analysis and mitigation generation."""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
         self.client = genai.Client(api_key=api_key)
         self.model = model
         self.efficiency = EfficiencyOrchestrator(min_severity=2.0)
+        self.success_count = 0
+        self.error_count = 0
+        self.errors = []
 
     def analyze_findings(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Analyze findings with efficiency optimization."""
@@ -25,6 +28,9 @@ class GeminiAnalyzer:
         for finding in compressed_findings:
             enriched = self._analyze_single_finding(finding)
             enriched_findings.append(enriched)
+
+        # Print success/error statistics
+        self._print_analysis_stats()
 
         return enriched_findings
 
@@ -52,9 +58,42 @@ class GeminiAnalyzer:
                 contents=prompt
             )
             analysis = self._parse_response(response.text, finding)
+            self.success_count += 1
+            print(f"✅ Analyzed: {finding.get('type', 'unknown')} at {finding.get('url', 'unknown')}")
             return {**finding, **analysis}
         except Exception as e:
-            return {**finding, "ai_analysis": None, "ai_error": str(e)}
+            self.error_count += 1
+            error_msg = str(e)
+            self.errors.append({
+                "finding": finding.get("type", "unknown"),
+                "url": finding.get("url", "unknown"),
+                "error": error_msg
+            })
+            print(f"❌ Failed: {finding.get('type', 'unknown')} at {finding.get('url', 'unknown')}")
+            print(f"   Error: {error_msg}")
+            return {**finding, "ai_analysis": None, "ai_error": error_msg}
+
+    def _print_analysis_stats(self):
+        """Print API analysis statistics."""
+        total = self.success_count + self.error_count
+        success_rate = (self.success_count / total * 100) if total > 0 else 0
+
+        print("\n" + "=" * 60)
+        print("🤖 AI ANALYSIS STATISTICS")
+        print("=" * 60)
+        print(f"Total Analyzed: {total}")
+        print(f"✅ Successful: {self.success_count}")
+        print(f"❌ Failed: {self.error_count}")
+        print(f"Success Rate: {success_rate:.1f}%")
+
+        if self.errors:
+            print("\n⚠️  Error Details:")
+            for err in self.errors[:5]:  # Show first 5 errors
+                print(f"  - {err['finding']} at {err['url']}: {err['error'][:100]}")
+            if len(self.errors) > 5:
+                print(f"  ... and {len(self.errors) - 5} more errors")
+
+        print("=" * 60 + "\n")
 
     def _build_optimized_prompt(self, finding: Dict[str, Any]) -> str:
         """Build efficient prompt with full output structure."""

@@ -314,6 +314,9 @@ def to_pdf(findings: list, generated_at: str, pdf_path: str, title="Security Ass
                         ref_links.append(f'<a href="{ref_url}">{ref_url}</a>')
                 ref_text = ", ".join(ref_links) if ref_links else "-"
 
+                # In the findings loop section (around line 260-280), add AI analysis display
+
+                # After the "Recommendation" row, add:
                 rows = [
                     ["URL", Paragraph(sanitize_html_for_pdf(it.get("url")), styles["Body"])],
                     ["Param", Paragraph(sanitize_html_for_pdf(it.get("param")), styles["Body"])],
@@ -326,10 +329,41 @@ def to_pdf(findings: list, generated_at: str, pdf_path: str, title="Security Ass
                                styles["Body"])],
                 ]
 
+                # ADD THIS SECTION FOR AI ANALYSIS:
+                if it.get("ai_analysis"):
+                    ai = it.get("ai_analysis")
+                    rows.append(["AI Analysis", ""])  # Section header
+
+                    if ai.get("vulnerability_explanation"):
+                        rows.append(["Vulnerability Explanation",
+                                     Paragraph(sanitize_html_for_pdf(ai.get("vulnerability_explanation")),
+                                               styles["Body"])])
+
+                    if ai.get("attack_scenario"):
+                        rows.append(["Attack Scenario",
+                                     Paragraph(sanitize_html_for_pdf(ai.get("attack_scenario")), styles["Body"])])
+
+                    if ai.get("impact"):
+                        rows.append(["Impact",
+                                     Paragraph(sanitize_html_for_pdf(ai.get("impact")), styles["Body"])])
+
+                    if ai.get("mitigation_steps"):
+                        steps = ", ".join(ai.get("mitigation_steps", [])[:3])
+                        rows.append(["Mitigation Steps",
+                                     Paragraph(sanitize_html_for_pdf(steps), styles["Body"])])
+
+                    if ai.get("code_mitigation"):
+                        rows.append(["Code Mitigation Example",
+                                     Paragraph(sanitize_html_for_pdf(ai.get("code_mitigation")), styles["Body"])])
+
+                    if ai.get("tools_to_use"):
+                        tools = ", ".join(ai.get("tools_to_use", [])[:3])
+                        rows.append(["Recommended Tools",
+                                     Paragraph(sanitize_html_for_pdf(tools), styles["Body"])])
+
+                # Rest of the code continues...
                 card = _card_table(rows)
                 story.append(KeepTogether([pills_tbl, Spacer(1, 2 * mm), card, Spacer(1, 6 * mm)]))
-
-            story.append(Spacer(1, 4 * mm))
 
     # Methodology
     story.append(PageBreak())
