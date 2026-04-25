@@ -2,10 +2,11 @@ import google.genai as genai
 from typing import List, Dict, Any
 from scanner.efficiency_layer import EfficiencyOrchestrator
 
+
 class GeminiAnalyzer:
     """Integrates Google Gemini AI for vulnerability analysis and mitigation generation."""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite"):
         self.client = genai.Client(api_key=api_key)
         self.model = model
         self.efficiency = EfficiencyOrchestrator(min_severity=2.0)
@@ -13,26 +14,46 @@ class GeminiAnalyzer:
         self.error_count = 0
         self.errors = []
 
-    def analyze_findings(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Analyze findings with efficiency optimization."""
+    def analyze_findings(self, original_findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Analyze findings while preserving original DAST engine data."""
 
         # Process through efficiency pipeline
-        pipeline_result = self.efficiency.process_findings(findings)
+        pipeline_result = self.efficiency.process_findings(original_findings)
 
         # Print efficiency metrics
         self._print_pipeline_stats(pipeline_result)
 
         compressed_findings = pipeline_result["stage_5_compression"]["compressed_findings"]
+
+        # Create mapping: compressed finding -> original finding(s)
         enriched_findings = []
 
-        for finding in compressed_findings:
-            enriched = self._analyze_single_finding(finding)
-            enriched_findings.append(enriched)
+        for compressed in compressed_findings:
+            # Find original finding(s) that match this compressed one
+            original = self._find_original_finding(compressed, original_findings)
+
+            # Analyze the compressed version
+            analysis = self._analyze_single_finding(compressed)
+
+            # Merge: Keep all original DAST data + add AI analysis
+            merged = {**original, **analysis}
+            enriched_findings.append(merged)
 
         # Print success/error statistics
         self._print_analysis_stats()
 
         return enriched_findings
+
+    def _find_original_finding(self, compressed: Dict[str, Any], original_findings: List[Dict[str, Any]]) -> Dict[
+        str, Any]:
+        """Find the original finding that corresponds to this compressed finding."""
+        for original in original_findings:
+            # Match by type and url
+            if (original.get("type") == compressed.get("type") and
+                    original.get("url") == compressed.get("url")):
+                return original.copy()
+        # Fallback: return compressed if no match
+        return compressed.copy()
 
     def _print_pipeline_stats(self, result: Dict[str, Any]):
         """Print efficiency pipeline statistics."""
@@ -49,7 +70,7 @@ class GeminiAnalyzer:
         print("=" * 60 + "\n")
 
     def _analyze_single_finding(self, finding: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze single compressed finding."""
+        """Analyze single compressed finding and return AI analysis only."""
         prompt = self._build_optimized_prompt(finding)
 
         try:
@@ -60,7 +81,7 @@ class GeminiAnalyzer:
             analysis = self._parse_response(response.text, finding)
             self.success_count += 1
             print(f"✅ Analyzed: {finding.get('type', 'unknown')} at {finding.get('url', 'unknown')}")
-            return {**finding, **analysis}
+            return analysis  # Return only AI analysis (not merged with finding yet)
         except Exception as e:
             self.error_count += 1
             error_msg = str(e)
@@ -71,7 +92,7 @@ class GeminiAnalyzer:
             })
             print(f"❌ Failed: {finding.get('type', 'unknown')} at {finding.get('url', 'unknown')}")
             print(f"   Error: {error_msg}")
-            return {**finding, "ai_analysis": None, "ai_error": error_msg}
+            return {"ai_analysis": None, "ai_error": error_msg}
 
     def _print_analysis_stats(self):
         """Print API analysis statistics."""
@@ -88,7 +109,7 @@ class GeminiAnalyzer:
 
         if self.errors:
             print("\n⚠️  Error Details:")
-            for err in self.errors[:5]:  # Show first 5 errors
+            for err in self.errors[:5]:
                 print(f"  - {err['finding']} at {err['url']}: {err['error'][:100]}")
             if len(self.errors) > 5:
                 print(f"  ... and {len(self.errors) - 5} more errors")
@@ -121,7 +142,7 @@ Respond in this JSON format (no markdown):
         return prompt
 
     def _parse_response(self, response_text: str, finding: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse response."""
+        """Parse response and return only AI analysis."""
         import json
         import re
 
