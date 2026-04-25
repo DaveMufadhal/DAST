@@ -6,12 +6,13 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, Flowable, KeepTogether
+    PageBreak, Flowable, KeepTogether, XPreformatted
 )
 from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from datetime import datetime
 from collections import defaultdict, Counter
+
 
 # --- Configuration & Palette ---
 BG_MAIN = colors.white
@@ -50,23 +51,66 @@ def sanitize_html_for_pdf(text):
 
 
 def sanitize_code_for_pdf(text):
-    """Sanitize code while preserving formatting"""
+    """Sanitize code and apply syntax highlighting for PDF"""
     if not isinstance(text, str):
         return str(text) if text is not None else "-"
 
-    # Remove HTML tags but keep line breaks and indentation
-    text = re.sub(r'<[^>]+>', '', text)
-    text = unescape(text)
-    text = text.replace('&', '&amp;')
-    text = text.replace('<', '&lt;')
-    text = text.replace('>', '&gt;')
-    text = text.replace('"', '&quot;')
-    text = text.replace("'", '&#x27;')
-    # DON'T collapse whitespace for code
-    text = text.strip()
+    # Remove raw HTML tags but preserve clean code string
+    clean_text = re.sub(r'<[^>]+>', '', text)
+    clean_text = unescape(clean_text)
 
-    return text or "-"
+    try:
+        from pygments import lex
+        from pygments.lexers import guess_lexer
 
+        lexer = guess_lexer(clean_text)
+        highlighted = []
+
+        for token, val in lex(clean_text, lexer):
+            token_str = str(token)
+            color = "#abb2bf"  # Default Light Grey text
+
+            # Map Pygments tokens to dark theme hex colors
+            if token_str.startswith('Token.Keyword'):
+                color = '#c678dd'  # Purple
+            elif token_str.startswith('Token.String'):
+                color = '#98c379'  # Green
+            elif token_str.startswith('Token.Comment'):
+                color = '#7f848e'  # Dark Grey
+            elif token_str.startswith('Token.Name.Function'):
+                color = '#61afef'  # Blue
+            elif token_str.startswith('Token.Name.Class'):
+                color = '#e5c07b'  # Yellow
+            elif token_str.startswith('Token.Name.Builtin'):
+                color = '#e5c07b'  # Yellow
+            elif token_str.startswith('Token.Number'):
+                color = '#d19a66'  # Orange
+            elif token_str.startswith('Token.Operator'):
+                color = '#56b6c2'  # Cyan
+
+            # Escape HTML special chars so ReportLab doesn't trip on them
+            val = val.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+            # Preserve formatting for standard Paragraphs
+            val = val.replace('\n', '<br/>')
+            val = val.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+
+            # Safely replace consecutive spaces to keep indentation but allow word wrap
+            while '  ' in val:
+                val = val.replace('  ', '&nbsp; ')
+
+            highlighted.append(f'<font color="{color}">{val}</font>')
+
+        return "".join(highlighted).strip() or "-"
+
+    except Exception:
+        # Fallback if pygments is not installed or errors out
+        clean_text = clean_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        clean_text = clean_text.replace('\n', '<br/>')
+        clean_text = clean_text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+        while '  ' in clean_text:
+            clean_text = clean_text.replace('  ', '&nbsp; ')
+        return clean_text.strip() or "-"
 
 def sev_bucket(score: int) -> str:
     if score <= 0:
@@ -131,7 +175,7 @@ def _create_finding_card(it, styles):
     sev = sev_bucket(it.get("severity_score", 0))
 
     # Build rows - keeping existing structure intact
-    title = sanitize_html_for_pdf(it.get("type", "Security Finding")).replace('_', ' ').title()
+    title_text = sanitize_html_for_pdf(it.get("type", "Security Finding")).replace('_', ' ').title()
 
     rows = [
         ["URL", Paragraph(sanitize_html_for_pdf(it.get("url")), styles["Body"])],
@@ -159,7 +203,7 @@ def _create_finding_card(it, styles):
                  Paragraph(sanitize_html_for_pdf(it.get("recommendation")) or "Follow OWASP best practices.",
                            styles["Body"])])
 
-    # AI Analysis Section - keeping existing structure
+    # AI Analysis Section
     if it.get("ai_analysis"):
         ai = it.get("ai_analysis")
         rows.append(["AI Analysis", ""])  # Section header
@@ -183,15 +227,36 @@ def _create_finding_card(it, styles):
                          Paragraph(sanitize_html_for_pdf(steps), styles["Body"])])
 
         if ai.get("code_mitigation"):
-            rows.append(["Code Mitigation Example",
-                         Paragraph(sanitize_code_for_pdf(ai.get("code_mitigation")), styles["BodySmall"])])
+            code_text = sanitize_code_for_pdf(ai.get("code_mitigation"))
+
+            # Create a clean standard code block style
+            code_block_style = ParagraphStyle(
+                name="StandardCodeBlock",
+                fontName="Courier",
+                fontSize=8,
+                textColor=colors.HexColor("#abb2bf"),
+                leading=10,
+                leftIndent=4,
+                rightIndent=4,
+                topPadding=6,
+                bottomPadding=6,
+                backColor=colors.black,  # Solid black background
+                borderColor=colors.HexColor("#475569"),  # Subtle slate border
+                borderWidth=0.5,
+                borderPadding=6,
+                alignment=TA_LEFT,
+                wordWrap='CJK'  # Enables line wrapping for long code segments
+            )
+
+            code_block = Paragraph(code_text, code_block_style)
+            rows.append(["Code Mitigation", code_block])
 
         if ai.get("tools_to_use"):
             tools = ", ".join(ai.get("tools_to_use", [])[:3])
             rows.append(["Recommended Tools",
                          Paragraph(sanitize_html_for_pdf(tools), styles["Body"])])
 
-    # Table styling
+    # Finding details table styling
     tbl = Table(rows, colWidths=[40 * mm, 140 * mm])
     tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), BG_MAIN),
@@ -208,9 +273,25 @@ def _create_finding_card(it, styles):
         ('LINEBELOW', (0, 0), (-1, -2), 0.2, BORDER_COLOR),
     ]))
 
+    # Highly visible title and severity header bar
+    header_data = [[
+        Paragraph(f"<b>{title_text}</b>", ParagraphStyle(name="CardTitle", textColor=colors.white, fontSize=10)),
+        Paragraph(f"<b>{sev.upper()} severity</b>",
+                  ParagraphStyle(name="CardSev", textColor=colors.white, fontSize=10, alignment=TA_CENTER))
+    ]]
+
+    header_table = Table(header_data, colWidths=[140 * mm, 40 * mm])
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), SEV_COLORS[sev]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (0, 0), 6),
+        ('RIGHTPADDING', (1, 0), (1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
     return KeepTogether([
-        Pill(sev.upper(), SEV_COLORS[sev]),
-        Spacer(1, 2 * mm),
+        header_table,
         tbl,
         Spacer(1, 8 * mm)
     ])
@@ -218,6 +299,9 @@ def _create_finding_card(it, styles):
 
 def to_pdf(findings: list, generated_at: str, pdf_path: str, title="Security Assessment Report"):
     """Generate a professional PDF report from findings"""
+
+    # Force 24-hour format (YYYY-MM-DD HH:MM:SS)
+    generated_at_24h = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     doc = SimpleDocTemplate(
         pdf_path,
@@ -236,7 +320,43 @@ def to_pdf(findings: list, generated_at: str, pdf_path: str, title="Security Ass
 
     # --- Executive Summary ---
     story.append(Paragraph(title, styles["H2"]))
-    story.append(Paragraph(f"Generated on {generated_at}", styles["Label"]))
+    story.append(Paragraph(f"Generated on {generated_at_24h}", styles["Label"]))
+    story.append(Spacer(1, 10 * mm))
+
+    # --- Severity Summary Table ---
+    summary_data = [
+        ["Severity", "Count"],
+        ["High", str(by_severity.get('high', 0))],
+        ["Medium", str(by_severity.get('medium', 0))],
+        ["Low", str(by_severity.get('low', 0))],
+        ["Info", str(by_severity.get('info', 0))],
+        ["Total", str(total)]
+    ]
+
+    summary_table = Table(summary_data, colWidths=[40 * mm, 30 * mm], hAlign='LEFT')
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), BG_CARD_HEADER),
+        ('TEXTCOLOR', (0, 0), (-1, 0), TEXT_PRIMARY),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('BACKGROUND', (0, 1), (-1, -1), BG_MAIN),
+        ('TEXTCOLOR', (0, 1), (-1, -2), TEXT_MUTED),
+        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+        ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        # Color code the severity labels
+        ('TEXTCOLOR', (0, 1), (0, 1), SEV_COLORS['high']),
+        ('TEXTCOLOR', (0, 2), (0, 2), SEV_COLORS['medium']),
+        ('TEXTCOLOR', (0, 3), (0, 3), SEV_COLORS['low']),
+        ('TEXTCOLOR', (0, 4), (0, 4), SEV_COLORS['info']),
+        # Make Total row bold and darker
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, -1), (-1, -1), TEXT_PRIMARY),
+    ]))
+
+    story.append(summary_table)
     story.append(Spacer(1, 10 * mm))
 
     if total > 0:
@@ -245,7 +365,7 @@ def to_pdf(findings: list, generated_at: str, pdf_path: str, title="Security Ass
         summary_text = f"""
         This automated security assessment identified <b>{total}</b> potential vulnerabilities.
         The overall risk level is assessed as <b>{risk_level}</b>.
-        The findings include {by_severity.get('high', 0)} High, {by_severity.get('medium', 0)} Medium, 
+        The findings include {by_severity.get('high', 0)} High, {by_severity.get('medium', 0)} Medium,
         and {by_severity.get('low', 0)} Low risk issues.
         Priority should be given to addressing high-severity issues first, followed by medium and low-severity findings.
         """

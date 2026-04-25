@@ -73,7 +73,7 @@ def main():
         loader.stop(f"Scan failed: {str(e)}")
         return
 
-    # AI Analysis
+    # AI Analysis - Enrich original findings with AI insights
     if args.ai_analysis:
         ai_loader = SimpleLoader("🤖 Running AI analysis with Gemini")
         ai_loader.start()
@@ -83,7 +83,9 @@ def main():
                 raise ValueError("Gemini API key not configured. Add GEMINI_API_KEY to your .env file")
 
             analyzer = GeminiAnalyzer(api_key=GEMINI_API_KEY)
+            # Pass original findings to preserve all DAST engine data
             findings = analyzer.analyze_findings(findings)
+
             ai_loader.stop("AI analysis completed")
             print("✅ AI insights added to findings")
 
