@@ -14,8 +14,7 @@ from .checks.auth_session import AuthSessionCheck
 from .checks.lfi import LFICheck
 from .checks.ssl_tls_certifcate import SSLTLSCheck
 from .reference_validator import validate_findings
-
-
+from .checks.business_logic import BusinessLogicCheck
 
 class Crawler:
     HREF_RE = re.compile(r'href=["\'](.*?)["\']', re.I)
@@ -187,6 +186,24 @@ class Orchestrator:
         findings += cookie_findings
 
         cookie_loader.stop(f"Cookie & CORS check completed - Found {len(cookie_findings)} issues")
+
+        # Business Logic Testing
+        logic_loader = SimpleLoader(
+            "🧠 Testing business logic vulnerabilities"
+        )
+        logic_loader.start()
+
+        logic_findings = BusinessLogicCheck.run(
+            self.http,
+            self.crawler.forms
+        )
+
+        findings += logic_findings
+
+        logic_loader.stop(
+            f"Business logic testing completed - "
+            f"Found {len(logic_findings)} issues"
+        )
 
         params_map = self.crawler.params
         if params_map:

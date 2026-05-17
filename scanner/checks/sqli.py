@@ -137,7 +137,7 @@ class SQLiCheck:
 
     @classmethod
     def _test_form(cls, http, form):
-        """Test a POST form for SQLi vulnerabilities."""
+        """Test a POST form for SQLi vulnerabilities (FIXED, minimal change)."""
         findings = []
 
         for input_field in form["inputs"]:
@@ -145,22 +145,31 @@ class SQLiCheck:
                 continue
 
             param_name = input_field["name"]
+            param_findings = []
+
+            # ✅ FIX 1: stable baseline values
+            base_data = {}
+            for inp in form["inputs"]:
+                if inp["value"]:
+                    base_data[inp["name"]] = inp["value"]
+                else:
+                    base_data[inp["name"]] = "1"  # <-- important fix
 
             for payload in cls.SQLI_PAYLOADS:
                 try:
-                    data = {}
-                    for inp in form["inputs"]:
-                        if inp["name"] == param_name:
-                            data[inp["name"]] = payload
-                        else:
-                            data[inp["name"]] = inp["value"]
+                    data = base_data.copy()
+                    data[param_name] = payload
 
                     start = time.time()
                     response = http.post(form["action"], data=data)
                     elapsed = time.time() - start
 
+                    # ✅ FIX 2: ignore bad responses
+                    if not response or response.status_code >= 400:
+                        continue
+
                     if cls._is_vulnerable(response, elapsed):
-                        findings.append({
+                        param_findings.append({
                             "type": "SQL Injection (POST)",
                             "severity": "CRITICAL",
                             "severity_score": 9,
@@ -169,19 +178,21 @@ class SQLiCheck:
                             "parameter": param_name,
                             "payload": payload,
                             "evidence": cls._extract_evidence(response.text),
-                            "description": f"SQL Injection vulnerability found in form parameter '{param_name}'. "
-                                           f"The application directly includes user input in SQL queries.",
-                            "recommendation": "Use parameterized queries (prepared statements), input validation, "
-                                              "and proper escaping to prevent SQL injection."
+                            "description": f"SQL Injection vulnerability found in form parameter '{param_name}'.",
+                            "recommendation": "Use parameterized queries and input validation."
                         })
                         break
 
                 except Exception:
                     continue
 
-            # If error-based detection failed, try boolean-blind detection for POST
-            if not findings:
-                findings.extend(cls._test_boolean_blind_post(http, form, param_name))
+            # ✅ FIX 3: boolean blind PER PARAM (this is the key fix)
+            if not param_findings:
+                param_findings.extend(
+                    cls._test_boolean_blind_post(http, form, param_name)
+                )
+
+            findings.extend(param_findings)
 
         return findings
 
@@ -239,7 +250,10 @@ class SQLiCheck:
             false_len = len(false_text)
 
             # Compare responses - now includes status code check
-            if cls._compare_responses(true_text, false_text, true_status, false_status):
+            # TRUE should match baseline, FALSE should differ from baseline
+            true_matches_baseline = not cls._compare_responses(baseline_text, true_text, baseline_status, true_status)
+            false_differs_baseline = cls._compare_responses(baseline_text, false_text, baseline_status, false_status)
+            if true_matches_baseline and false_differs_baseline:
                 findings.append({
                     "type": "SQL Injection (GET - Boolean Blind)",
                     "severity": "CRITICAL",
@@ -308,7 +322,9 @@ class SQLiCheck:
             false_len = len(false_text)
 
             # Compare responses - now includes status code check
-            if cls._compare_responses(true_text, false_text, true_status, false_status):
+            true_matches_baseline = not cls._compare_responses(baseline_text, true_text, baseline_status, true_status)
+            false_differs_baseline = cls._compare_responses(baseline_text, false_text, baseline_status, false_status)
+            if true_matches_baseline and false_differs_baseline:
                 findings.append({
                     "type": "SQL Injection (POST - Boolean Blind)",
                     "severity": "CRITICAL",
@@ -394,7 +410,3 @@ class SQLiCheck:
                 return line.strip()[:200]
 
         return "Potential SQL Injection vulnerability detected"
-
-
-
-"""Extract relevant evidence from response."""

@@ -148,6 +148,32 @@ REFERENCE_CATALOG: Dict[str, List[ReferenceItem]] = {
             source="CWE",
         ),
     ],
+    "business_logic": [
+        ReferenceItem(
+            id="OWASP-A10-2021",
+            title="Server-Side Request Forgery (SSRF)",
+            url="https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/",
+            source="OWASP",
+        ),
+        ReferenceItem(
+            id="CWE-863",
+            title="Incorrect Authorization",
+            url="https://cwe.mitre.org/data/definitions/863.html",
+            source="CWE",
+        ),
+        ReferenceItem(
+            id="CWE-943",
+            title="Improper Neutralization of Special Elements in Data Query Logic",
+            url="https://cwe.mitre.org/data/definitions/943.html",
+            source="CWE",
+        ),
+        ReferenceItem(
+            id="CWE-697",
+            title="Incorrect Comparison",
+            url="https://cwe.mitre.org/data/definitions/697.html",
+            source="CWE",
+        ),
+    ],
 }
 
 
@@ -173,7 +199,10 @@ def _infer_category(finding_type: str) -> str:
         return "headers"
     if "misconfig" in t or "configuration" in t:
         return "misconfig"
+    if "business logic" in t or "price" in t or "quantity" in t or "role" in t or "coupon" in t or "race condition" in t:
+        return "business_logic"
     return "unknown"
+
 
 
 def _is_trusted_url(url: str) -> bool:
