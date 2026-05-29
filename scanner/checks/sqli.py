@@ -116,7 +116,7 @@ class SQLiCheck:
                         "severity": "CRITICAL",
                         "severity_score": 9,
                         "url": test_url,
-                        "parameter": param_name,
+                        "param": param_name,
                         "payload": payload,
                         "evidence": cls._extract_evidence(response.text),
                         "description": f"SQL Injection vulnerability found in parameter '{param_name}'. "
@@ -175,7 +175,7 @@ class SQLiCheck:
                             "severity_score": 9,
                             "url": form["action"],
                             "form_page": form["page"],
-                            "parameter": param_name,
+                            "param": param_name,
                             "payload": payload,
                             "evidence": cls._extract_evidence(response.text),
                             "description": f"SQL Injection vulnerability found in form parameter '{param_name}'.",
@@ -259,7 +259,7 @@ class SQLiCheck:
                     "severity": "CRITICAL",
                     "severity_score": 9,
                     "url": true_url,
-                    "parameter": param_name,
+                    "param": param_name,
                     "payload": true_payload,
                     "evidence": f"Boolean-based blind SQLi detected: TRUE condition (status {true_status}, {true_len} bytes) vs FALSE condition (status {false_status}, {false_len} bytes)",
                     "description": f"Boolean-based blind SQL Injection vulnerability found in parameter '{param_name}'. "
@@ -331,7 +331,7 @@ class SQLiCheck:
                     "severity_score": 9,
                     "url": form["action"],
                     "form_page": form["page"],
-                    "parameter": param_name,
+                    "param": param_name,
                     "payload": "' AND '1'='1",
                     "evidence": f"Boolean-based blind SQLi detected: TRUE condition (status {true_status}, {true_len} bytes) vs FALSE condition (status {false_status}, {false_len} bytes)",
                     "description": f"Boolean-based blind SQL Injection vulnerability found in form parameter '{param_name}'. "

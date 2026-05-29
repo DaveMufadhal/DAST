@@ -105,7 +105,7 @@ class XSSCheck:
                         "severity": "HIGH",
                         "severity_score": 8,
                         "url": test_url,
-                        "parameter": param_name,
+                        "param": param_name,
                         "payload": payload,
                         "evidence": cls._extract_evidence(response.text, payload),
                         "description": f"Reflected XSS vulnerability found in parameter '{param_name}'. "
@@ -149,7 +149,7 @@ class XSSCheck:
                             "severity_score": 8,
                             "url": form["action"],
                             "form_page": form["page"],
-                            "parameter": param_name,
+                            "param": param_name,
                             "payload": payload,
                             "evidence": cls._extract_evidence(response.text, payload),
                             "description": f"Stored XSS vulnerability found in form parameter '{param_name}'. "

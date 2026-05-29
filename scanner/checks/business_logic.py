@@ -163,7 +163,7 @@ class BusinessLogicCheck:
                             "severity": "CRITICAL",
                             "severity_score": 9,
                             "url": form["action"],
-                            "parameter": inp["name"],
+                            "param": inp["name"],
                             "payload": mutation,
                             "evidence": (
                                 f"Application accepted suspicious "
@@ -245,7 +245,7 @@ class BusinessLogicCheck:
                             "severity": "HIGH",
                             "severity_score": 8,
                             "url": form["action"],
-                            "parameter": inp["name"],
+                            "param": inp["name"],
                             "payload": mutation,
                             "evidence": (
                                 f"Application accepted suspicious "
@@ -319,7 +319,7 @@ class BusinessLogicCheck:
                             "severity": "CRITICAL",
                             "severity_score": 10,
                             "url": form["action"],
-                            "parameter": inp["name"],
+                            "param": inp["name"],
                             "payload": mutation,
                             "evidence": (
                                 f"Role parameter accepted value: "
@@ -392,7 +392,7 @@ class BusinessLogicCheck:
                         "severity": "MEDIUM",
                         "severity_score": 6,
                         "url": form["action"],
-                        "parameter": inp["name"],
+                        "param": inp["name"],
                         "payload": "DISCOUNT100",
                         "evidence": (
                             "Same coupon request "
@@ -462,6 +462,8 @@ class BusinessLogicCheck:
                     "severity": "CRITICAL",
                     "severity_score": 10,
                     "url": form["action"],
+                    "param": None,
+                    "payload": None,
                     "evidence": (
                         f"{success_count} simultaneous "
                         f"requests succeeded."

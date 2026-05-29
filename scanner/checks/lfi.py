@@ -96,7 +96,7 @@ class LFICheck:
                         "severity": "HIGH",
                         "severity_score": 8,
                         "url": test_url,
-                        "parameter": param_name,
+                        "param": param_name,
                         "payload": payload,
                         "evidence": cls._extract_evidence(response.text),
                         "description": f"Local File Inclusion vulnerability found in parameter '{param_name}'. "
@@ -142,7 +142,7 @@ class LFICheck:
                             "severity_score": 8,
                             "url": form["action"],
                             "form_page": form["page"],
-                            "parameter": param_name,
+                            "param": param_name,
                             "payload": payload,
                             "evidence": cls._extract_evidence(response.text),
                             "description": f"Local File Inclusion vulnerability found in form parameter '{param_name}'. "
